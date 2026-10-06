@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1017391434779",
+    "project_id": "el-chucho-apnea",
+    "storage_bucket": "el-chucho-apnea.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1017391434779:android:983ceba9dedbe20fdffcbe",
+        "android_client_info": {
+          "package_name": "El_chucho_Apnea0204.A1981.B2026"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDnLdZ0kv-oML3QIKE3UGWmgMkn9WoWLDE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

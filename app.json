@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "El Chucho Apnea",
+    "slug": "el-chucho-apnea",
+    "version": "1.0.3",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#002B49"
+      },
+      "package": "com.apneaclub.app"
+    },
+
+    "ios": {
+      "bundleIdentifier": "com.apneaclub.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#ffffff"
+        }
+      ]
+    ],
+
+    "extra": {
+      "eas": {
+        "projectId": "a565b526-0582-4b71-8419-3d05ab309f54"
+      }
+    },
+
+    "owner": "miguelarinaga"
+  }
+}
