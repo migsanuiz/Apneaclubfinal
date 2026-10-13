@@ -846,45 +846,36 @@ function StudentScreen({
         const [
           sessionsResult,
           recordsResult,
-        ] =
-          await Promise.all([
-            supabase
-              .from('sessions')
-              .select(`
-                id,
-                title,
-                session_date,
-                max_slots,
-                created_at,
-                session_attendees (
-                  student_id,
-                  profiles (
-                    id,
-                    name
-                  )
+        ] = await Promise.all([
+          supabase
+            .from('sessions')
+            .select(`
+              id,
+              title,
+              session_date,
+              max_slots,
+              created_at,
+              session_attendees (
+                student_id,
+                profiles (
+                  id,
+                  name
                 )
-              `)
-              .order(
-                'session_date',
-                {
-                  ascending: true,
-                }
-              ),
-
-            supabase
-              .from('apnea_records')
-              .select('*')
-              .eq(
-                'student_id',
-                profile.id
               )
-              .order(
-                'recorded_at',
-                {
-                  ascending: false,
-                }
-              ),
-          ]);
+            `)
+            .order('session_date', {
+              ascending: true,
+            }),
+
+          supabase
+            .from('apnea_records')
+            .select('*')
+            .eq('student_id', profile.id)
+            .order('created_at', {
+              ascending: false,
+            }),
+        ]);
+
 
         if (
           sessionsResult.error
@@ -1314,69 +1305,43 @@ function StudentScreen({
             }
           />
 
-          {records.length ===
-          0 ? (
-            <Text
-              style={styles.emptyText}
-            >
+
+          {records.length === 0 ? (
+            <Text style={styles.emptyText}>
               Todavía no tienes marcas registradas.
             </Text>
           ) : (
-            records.map(
-              (record) => (
-                <View
-                  key={record.id}
-                  style={
-                    styles.recordCard
-                  }
-                >
-                  <Text
-                    style={
-                      styles.recordTitle
-                    }
-                  >
-                    🫁 Marca
-                  </Text>
+            records.map((record) => (
+              <View
+                key={record.id}
+                style={styles.recordCard}
+              >
+                <Text style={styles.recordTitle}>
+                  🫁 Marca
+                </Text>
 
-                  <Text
-                    style={
-                      styles.recordValue
-                    }
-                  >
-                    ⏱️ Estática:{' '}
-                    {formatStatic(
-                      record.static_seconds
-                    )}
-                  </Text>
+                <Text style={styles.recordValue}>
+                  Estática:{' '}
+                  {formatStatic(record.static_seconds)}
+                </Text>
 
-                  <Text
-                    style={
-                      styles.recordValue
-                    }
-                  >
-                    🌊 Dinámica:{' '}
-                    {record.dynamic_meters
-                      ? `${record.dynamic_meters} m`
-                      : '—'}
-                  </Text>
+                <Text style={styles.recordValue}>
+                  🌊 Dinámica:{' '}
+                  {record.dynamic_meters != null
+                    ? `${record.dynamic_meters} m`
+                    : '—'}
+                </Text>
 
-                  <Text
-                    style={
-                      styles.recordDate
-                    }
-                  >
-                    {formatDate(
-                      record.recorded_at
-                    )}
-                  </Text>
-                </View>
-              )
-            )
+                <Text style={styles.recordDate}>
+                  {formatDate(record.created_at)}
+                </Text>
+              </View>
+            ))
           )}
         </SectionCard>
 
 
-        {/* SESIONES */}
+         {/* SESIONES */}
 
         <SectionCard
           title="Entrenamientos"

@@ -14,3 +14,17 @@ yarn-error.log*
 !.env.example
 application-*.aab
 .firebase/
+
+# Android generated files
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/app/debug.keystore
+
+# Local backup files
+*.backup
+
+google-services.json
+
+google-services.json
