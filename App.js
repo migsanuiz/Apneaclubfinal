@@ -385,65 +385,126 @@ export default function App() {
   ]);
 
 
-  const signIn = async (
-    email,
-    password
-  ) => {
-    const cleanEmail =
-      email.trim().toLowerCase();
+ const signIn = async (
+  email,
+  password,
+  expectedRole = 'alumno',
+  inviteCode = ''
+) => {
+  const cleanEmail = email.trim().toLowerCase();
 
-    if (!cleanEmail) {
+  if (!cleanEmail || !password) {
+    Alert.alert('Error', 'Introduce tu email y contraseña.');
+    return false;
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: cleanEmail,
+    password,
+  });
+
+  if (error) {
+    Alert.alert(
+      'No se pudo iniciar sesión',
+      traducirError(error.message)
+    );
+    return false;
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', data.user.id)
+    .maybeSingle();
+
+  if (profileError || !profile) {
+    await supabase.auth.signOut();
+    Alert.alert(
+      'Perfil no disponible',
+      'No se ha encontrado el perfil de esta cuenta.'
+    );
+    return false;
+  }
+
+  if (expectedRole === 'entrenador' && profile.role === 'alumno') {
+    if (!inviteCode.trim()) {
+      await supabase.auth.signOut();
       Alert.alert(
-        'Error',
-        'Introduce tu email.'
+        'Activación necesaria',
+        'Para activar una cuenta de entrenador debes registrarte con una invitación válida.'
       );
-
       return false;
     }
 
-    if (!password) {
-      Alert.alert(
-        'Error',
-        'Introduce tu contraseña.'
-      );
+    const { error: activationError } = await supabase.rpc(
+      'activate_trainer_invite',
+      { p_code: inviteCode.trim() }
+    );
 
+    if (activationError) {
+      await supabase.auth.signOut();
+      Alert.alert(
+        'No se pudo activar el entrenador',
+        traducirError(activationError.message)
+      );
       return false;
     }
 
-    const {
-      error,
-    } =
-      await supabase.auth.signInWithPassword(
-        {
-          email: cleanEmail,
-          password,
-        }
-      );
+    const { data: updatedProfile, error: updatedError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .single();
 
-    if (error) {
+    if (updatedError || updatedProfile?.role !== 'entrenador') {
+      await supabase.auth.signOut();
       Alert.alert(
-        'No se pudo iniciar sesión',
-        traducirError(error.message)
+        'Activación no confirmada',
+        'No se ha podido confirmar el rol de entrenador.'
       );
-
       return false;
     }
 
-    return true;
-  };
+   await loadProfile(data.user.id);
+return true;
+  }
+
+  if (profile.role !== expectedRole) {
+    await supabase.auth.signOut();
+    Alert.alert(
+      'Acceso no autorizado',
+      expectedRole === 'entrenador'
+        ? 'Esta cuenta no tiene permisos de entrenador.'
+        : 'Esta cuenta no tiene permisos de alumno.'
+    );
+    return false;
+  }
+
+  return true;
+};
 
 
   const signUp = async (
-    email,
-    password,
-    name
-  ) => {
+  email,
+  password,
+  name,
+  userType = 'alumno',
+  inviteCode = ''
+) => {
     const cleanEmail =
       email.trim().toLowerCase();
 
     const cleanName =
       name.trim();
+const cleanInviteCode = inviteCode.trim();
 
+if (userType === 'entrenador' && !cleanInviteCode) {
+  Alert.alert(
+    'Invitación obligatoria',
+    'Introduce el código de invitación del entrenador.'
+  );
+  return false;
+}
     if (!cleanName) {
       Alert.alert(
         'Error',
@@ -509,14 +570,20 @@ export default function App() {
       return false;
     }
 
-    if (!data.session) {
-      Alert.alert(
-        'Cuenta creada',
-        'Revisa tu correo para confirmar la cuenta y después inicia sesión.'
-      );
-    }
+    
+if (userType === 'entrenador') {
+  Alert.alert(
+    'Cuenta creada',
+    'Confirma tu correo electrónico. Después vuelve a la app, pulsa Entrar como entrenador e inicia sesión con tu correo y contraseña. Introduce el código de invitación para activar el acceso.'
+  );
+} else if (!data.session) {
+  Alert.alert(
+    'Cuenta creada',
+    'Revisa tu correo para confirmar la cuenta y después inicia sesión.'
+  );
+}
 
-    return true;
+return true;
   };
 
 
@@ -594,49 +661,41 @@ export default function App() {
    LOGIN
 ========================================================= */
 
-function LoginScreen({
-  onLogin,
-  onRegister,
-}) {
-  const [mode, setMode] =
-    useState('login');
 
-  const [name, setName] =
-    useState('');
-
-  const [email, setEmail] =
-    useState('');
-
-  const [password, setPassword] =
-    useState('');
-
-  const [loading, setLoading] =
-    useState(false);
-
+function LoginScreen({ onLogin, onRegister }) {
+  const [mode, setMode] = useState('choose');
+  const [userType, setUserType] = useState('alumno');
+  const [name, setName] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const submit = async () => {
     if (loading) return;
-
     setLoading(true);
 
     try {
-      if (
-        mode === 'login'
-      ) {
-        await onLogin(
+      if (mode === 'login' || mode === 'trainerLogin') {
+        const loggedIn = await onLogin(
           email,
-          password
+          password,
+          userType,
+          inviteCode.trim()
         );
-      } else {
-        const created =
-          await onRegister(
-            email,
-            password,
-            name
-          );
+
+        if (loggedIn) setInviteCode('');
+      } else if (mode === 'register') {
+        const created = await onRegister(
+          email,
+          password,
+          name,
+          userType,
+          inviteCode.trim()
+        );
 
         if (created) {
-          setMode('login');
+          setMode(userType === 'entrenador' ? 'trainerLogin' : 'login');
           setPassword('');
         }
       }
@@ -645,164 +704,167 @@ function LoginScreen({
     }
   };
 
+  const chooseType = (type) => {
+    setUserType(type);
+    setMode(type === 'alumno' ? 'login' : 'trainerLogin');
+  };
+
+  const register = () => {
+    setMode(
+      mode === 'register'
+        ? (userType === 'entrenador' ? 'trainerLogin' : 'login')
+        : 'register'
+    );
+  };
 
   return (
-    <SafeAreaView
-      style={styles.container}
-    >
+    <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={
-          Platform.OS === 'ios'
-            ? 'padding'
-            : undefined
-        }
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          contentContainerStyle={
-            styles.loginContainer
-          }
+          contentContainerStyle={styles.loginContainer}
           keyboardShouldPersistTaps="handled"
         >
-          <View
-            style={styles.loginCard}
-          >
-            <Text
-              style={styles.logo}
-            >
-              🐕
-            </Text>
+          <View style={styles.loginCard}>
+            <Text style={styles.logo}>🤿</Text>
+            <Text style={styles.loginTitle}>El Chucho Apnea</Text>
+            <Text style={styles.loginSubtitle}></Text>
 
-            <Text
-              style={styles.loginTitle}
-            >
-              El Chucho Apnea
-            </Text>
-
-            <Text
-              style={styles.loginSubtitle}
-            >
-              Entrenamiento · Apnea · Progreso
-            </Text>
-
-            {mode ===
-              'register' && (
+            {mode === 'choose' ? (
               <>
-                <Text
-                  style={styles.inputLabel}
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={() => chooseType('alumno')}
                 >
-                  Nombre
-                </Text>
+                  <Text style={styles.primaryButtonText}>
+                    Entrar como alumno
+                  </Text>
+                </TouchableOpacity>
 
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => chooseType('entrenador')}
+                >
+                  <Text style={styles.secondaryButtonText}>
+                    Entrar como entrenador
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {mode === 'register' && (
+                  <>
+                    <Text style={styles.inputLabel}>Nombre</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Tu nombre"
+                      placeholderTextColor="#64748b"
+                      value={name}
+                      onChangeText={setName}
+                      autoCapitalize="words"
+                    />
+                  </>
+                )}
+
+                {userType === 'entrenador' && (
+                  <>
+                    <Text style={styles.inputLabel}>
+                      Código de invitación
+                    </Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Introduce tu código"
+                      placeholderTextColor="#64748b"
+                      value={inviteCode}
+                      onChangeText={setInviteCode}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+
+                    <TouchableOpacity
+                      style={styles.secondaryButton}
+                      onPress={register}
+                    >
+                      <Text style={styles.secondaryButtonText}>
+                        {mode === 'register'
+                          ? 'Volver al acceso de entrenador'
+                          : 'Crear cuenta de entrenador'}
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                <Text style={styles.inputLabel}>Email</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Tu nombre"
+                  placeholder="Tu correo electrónico"
                   placeholderTextColor="#64748b"
-                  value={name}
-                  onChangeText={
-                    setName
-                  }
-                  autoCapitalize="words"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
                 />
-              </>
-            )}
 
-            <Text
-              style={styles.inputLabel}
-            >
-              Email
-            </Text>
-
-            <TextInput
-              style={styles.input}
-              placeholder="tu@email.com"
-              placeholderTextColor="#64748b"
-              value={email}
-              onChangeText={
-                setEmail
-              }
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-
-            <Text
-              style={styles.inputLabel}
-            >
-              Contraseña
-            </Text>
-
-            <TextInput
-              style={styles.input}
-              placeholder="Mínimo 6 caracteres"
-              placeholderTextColor="#64748b"
-              value={password}
-              onChangeText={
-                setPassword
-              }
-              secureTextEntry
-            />
-
-            <TouchableOpacity
-              style={[
-                styles.primaryButton,
-                loading &&
-                  styles.disabledButton,
-              ]}
-              onPress={submit}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator
-                  color="#fff"
+                <Text style={styles.inputLabel}>Contraseña</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Mínimo 6 caracteres"
+                  placeholderTextColor="#64748b"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
                 />
-              ) : (
-                <Text
-                  style={
-                    styles.primaryButtonText
-                  }
+
+                <TouchableOpacity
+                  style={[
+                    styles.primaryButton,
+                    loading && styles.disabledButton,
+                  ]}
+                  onPress={submit}
+                  disabled={loading}
                 >
-                  {mode ===
-                  'login'
-                    ? 'Entrar'
-                    : 'Crear cuenta'}
-                </Text>
-              )}
-            </TouchableOpacity>
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>
+                      {mode === 'register' ? 'Crear cuenta' : 'Entrar'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() =>
-                setMode(
-                  mode ===
-                    'login'
-                    ? 'register'
-                    : 'login'
-                )
-              }
-            >
-              <Text
-                style={
-                  styles.secondaryButtonText
-                }
-              >
-                {mode === 'login'
-                  ? 'Crear una cuenta'
-                  : 'Ya tengo una cuenta'}
-              </Text>
-            </TouchableOpacity>
+                {userType === 'alumno' && (
+                  <TouchableOpacity
+                    style={styles.secondaryButton}
+                    onPress={register}
+                  >
+                    <Text style={styles.secondaryButtonText}>
+                      {mode === 'register'
+                        ? 'Ya tengo una cuenta'
+                        : 'Crear una cuenta de alumno'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
-            {mode ===
-              'register' && (
-              <Text
-                style={
-                  styles.infoText
-                }
-              >
-                Las cuentas nuevas se crean como
-                Alumno. El rol de Entrenador lo
-                asigna el administrador.
-              </Text>
+                {userType === 'entrenador' && (
+                  <Text style={styles.infoText}>
+                    Acceso exclusivo para el entrenador autorizado.
+                  </Text>
+                )}
+
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => {
+                    setMode('choose');
+                    setPassword('');
+                    setInviteCode('');
+                  }}
+                >
+                  <Text style={styles.secondaryButtonText}>Volver</Text>
+                </TouchableOpacity>
+              </>
             )}
           </View>
         </ScrollView>
@@ -810,6 +872,7 @@ function LoginScreen({
     </SafeAreaView>
   );
 }
+
 
 
 /* =========================================================
